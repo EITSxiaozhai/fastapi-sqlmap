@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, declarative_base
 
 Base = declarative_base()
 
+
 class SqlmapScanResult(Base):
     __tablename__ = "sqlmap_scan_results"
 
@@ -40,6 +41,4 @@ class SqlmapScanResult(Base):
     # 时间
     started_at: Mapped[datetime] = mapped_column(DateTime)
     finished_at: Mapped[datetime] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

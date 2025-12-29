@@ -9,6 +9,7 @@ app.include_router(sqlmap_router)
 app.include_router(admin_router)
 app.include_router(db_router)
 
+
 @app.get("/")
 def root():
     return {"status": "running"}
