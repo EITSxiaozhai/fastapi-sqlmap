@@ -25,6 +25,7 @@ exclude = '''
     \.venv
   | venv
   | alembic/versions
+  | alembic
   | migrations
   | build
   | dist
