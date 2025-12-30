@@ -20,3 +20,9 @@ class SQLMapScanRequest(BaseModel):
 class SQLMapScanResponse(BaseModel):
     task_id: int
     status: str
+
+
+class SqlmapScanPayload(BaseModel):
+    url: HttpUrl = Field(..., description="需要扫描的目标 URL")
+    level: Optional[int] = Field(1, ge=1, le=5, description="测试级别 (1-5)")
+    risk: Optional[int] = Field(1, ge=1, le=3, description="风险等级 (1-3)")
