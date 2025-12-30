@@ -42,3 +42,13 @@ class SqlmapScanResult(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime)
     finished_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class SqlmapScanPayload(Base):
+    __tablename__ = "sqlmap_task_results"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    task_id: Mapped[int] = mapped_column(Text, nullable=False)
+
+    status: Mapped[str] = mapped_column(Boolean, nullable=False)
+
