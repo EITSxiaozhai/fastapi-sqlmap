@@ -3,9 +3,9 @@ from app.models.sqlmap_result import SqlmapScanPayload
 
 
 async def task_add(
-    task_id: str,
+    task_id: int,
     scan_url: str,
-    status: bool = False,
+    status: str,
     scan_risk: int = 1,
     scan_level: int = 1,
 ):
