@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Text,
+    Integer,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, declarative_base
@@ -43,6 +44,7 @@ class SqlmapScanResult(Base):
     finished_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
 class SqlmapScanPayload(Base):
     __tablename__ = "sqlmap_task_results"
 
@@ -52,3 +54,10 @@ class SqlmapScanPayload(Base):
 
     status: Mapped[str] = mapped_column(Boolean, nullable=False)
 
+    scan_url: Mapped[str | None] = mapped_column(String(2048), nullable=False)
+
+    scan_level: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    scan_risk: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
