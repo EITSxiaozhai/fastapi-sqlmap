@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from app.apis.sqlmap import router as sqlmap_router
-from app.apis.admin import router as admin_router
+from app.apis.sqlmap_api import router as sqlmap_router
+from app.apis.admin_api import router as admin_router
 from app.apis.db_health import router as db_router
 
 app = FastAPI(title="FastAPI SQLMap Manager")
