@@ -40,7 +40,7 @@ async def start_scan(payload: sqlmapschema.SqlmapScanPayload = Body(...)):
     await sqlmap_task.task_add(
         task_id=taskid,
         scan_url=str(payload.url),
-        status=True,
+        status="running",
         scan_risk=payload.risk,
         scan_level=payload.level,
     )
@@ -53,11 +53,22 @@ async def start_scan(payload: sqlmapschema.SqlmapScanPayload = Body(...)):
 
 @router.get("/tasks")
 async def list_tasks():
-    """
-    这里通常从数据库查
-    """
-    return {"tasks": [{"taskid": "xxxx", "target": "http://xxx", "status": "running"}]}
+    tasks = await sqlmap_task.list_tasks()
 
+    return {
+        "total": len(tasks),
+        "tasks": [
+            {
+                "task_id": t.task_id,
+                "url": t.scan_url,
+                "status": t.status,
+                "level": t.scan_level,
+                "risk": t.scan_risk,
+                "created_at": t.created_at,
+            }
+            for t in tasks
+        ],
+    }
 
 @router.get("/tasks/{task_id}")
 async def task_status(task_id: str):
