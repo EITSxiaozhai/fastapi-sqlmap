@@ -1,6 +1,6 @@
 from app.database.database import AsyncSessionLocal
 from app.models.sqlmap_result import SqlmapScanPayload
-
+from sqlalchemy import select
 
 async def task_add(
     task_id: int,
@@ -19,3 +19,10 @@ async def task_add(
         )
         session.add(task)
         await session.commit()
+
+async def list_tasks():
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(SqlmapScanPayload).order_by(SqlmapScanPayload.created_at.desc())
+        )
+        return result.scalars().all()
