@@ -1,5 +1,5 @@
 from app.database.database import AsyncSessionLocal
-from app.models.sqlmap_result import SqlmapScanPayload
+from app.models.sqlmap_result import SqlmapScanPayload, SqlmapScanLog, SqlmapScanResult
 from sqlalchemy import select
 
 
@@ -28,3 +28,19 @@ async def list_tasks():
             select(SqlmapScanPayload).order_by(SqlmapScanPayload.created_at.desc())
         )
         return result.scalars().all()
+
+
+async def get_task_logs(task_id: str, limit: int = 100, offset: int = 0):
+    """
+    查询指定任务的日志
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(SqlmapScanLog)
+            .where(SqlmapScanLog.task_id == task_id)
+            .order_by(SqlmapScanLog.created_at)
+            .limit(limit)
+            .offset(offset)
+        )
+        logs = result.scalars().all()
+    return logs

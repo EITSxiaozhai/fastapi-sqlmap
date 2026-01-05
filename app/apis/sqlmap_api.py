@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Body
 import requests
 from dotenv import load_dotenv
 import app.schema.sqlmap as sqlmapschema
-import app.core.sqlmap_task as sqlmap_task
+import app.core.sqlmap_core as sqlmap_task
 
 router = APIRouter(prefix="/sqlmap", tags=["SQLMap扫描任务"])
 
@@ -82,13 +82,24 @@ async def task_status(task_id: str):
 
 
 @router.get("/tasks/{task_id}/log")
-async def task_log(task_id: str):
-    r = requests.get(f"{SQLMAP_API}/scan/{task_id}/log", auth=AUTH)
+async def task_log(task_id: str, limit: int = 100, offset: int = 0):
+    logs = await sqlmap_task.get_task_logs(task_id, limit, offset)
 
-    if not r.ok:
-        raise HTTPException(404, "无法获取日志")
+    if not logs:
+        raise HTTPException(status_code=404, detail="没有找到日志")
 
-    return r.json()
+    return {
+        "task_id": task_id,
+        "logs": [
+            {
+                "level": log.level,
+                "message": log.message,
+                "log_time": log.log_time,
+                "created_at": log.created_at.isoformat(),
+            }
+            for log in logs
+        ],
+    }
 
 
 @router.get("/tasks/{task_id}/result")
