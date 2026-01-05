@@ -10,6 +10,7 @@ dependencies = [
     "celery>=5.6.1",
     "celery-types>=0.24.0",
     "fastapi>=0.127.0",
+    "pre-commit>=4.5.1",
     "psycopg2-binary>=2.9.11",
     "pydantic>=2.12.5",
     "python-dotenv>=1.2.1",
