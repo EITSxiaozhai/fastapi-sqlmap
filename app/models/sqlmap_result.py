@@ -6,11 +6,20 @@ from sqlalchemy import (
     DateTime,
     Text,
     Integer,
+    Enum
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, declarative_base
+import enum
 
 Base = declarative_base()
+
+class ScanStatus(str, enum.Enum):
+    pending = "pending"
+    running = "running"
+    success = "success"
+    failed = "failed"
+    stopped = "stopped"
 
 
 class SqlmapScanResult(Base):
@@ -52,7 +61,11 @@ class SqlmapScanPayload(Base):
 
     task_id: Mapped[int] = mapped_column(Text, nullable=False)
 
-    status: Mapped[str] = mapped_column(Boolean, nullable=False)
+    status: Mapped[ScanStatus] = mapped_column(
+        Enum(ScanStatus, name="scan_status_enum"),
+        nullable=False,
+        default=ScanStatus.pending,
+    )
 
     scan_url: Mapped[str | None] = mapped_column(String(2048), nullable=False)
 
@@ -61,3 +74,34 @@ class SqlmapScanPayload(Base):
     scan_risk: Mapped[int] = mapped_column(Integer, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SqlmapScanLog(Base):
+    __tablename__ = "sqlmap_scan_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    task_id: Mapped[str] = mapped_column(
+        String(64),
+        index=True,
+        nullable=False,
+    )
+
+    level: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+    )  # INFO / WARNING / ERROR
+
+    message: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    # sqlmap 返回的原始时间（可选）
+    log_time: Mapped[str | None] = mapped_column(String(32))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        index=True,
+    )
