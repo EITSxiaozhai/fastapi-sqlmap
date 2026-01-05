@@ -1,18 +1,12 @@
 from datetime import datetime
 
-from sqlalchemy import (
-    String,
-    Boolean,
-    DateTime,
-    Text,
-    Integer,
-    Enum
-)
+from sqlalchemy import String, Boolean, DateTime, Text, Integer, Enum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, declarative_base
 import enum
 
 Base = declarative_base()
+
 
 class ScanStatus(str, enum.Enum):
     pending = "pending"

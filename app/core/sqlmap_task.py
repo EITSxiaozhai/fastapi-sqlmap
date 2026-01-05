@@ -2,6 +2,7 @@ from app.database.database import AsyncSessionLocal
 from app.models.sqlmap_result import SqlmapScanPayload
 from sqlalchemy import select
 
+
 async def task_add(
     task_id: int,
     scan_url: str,
@@ -19,6 +20,7 @@ async def task_add(
         )
         session.add(task)
         await session.commit()
+
 
 async def list_tasks():
     async with AsyncSessionLocal() as session:

@@ -70,6 +70,7 @@ async def list_tasks():
         ],
     }
 
+
 @router.get("/tasks/{task_id}")
 async def task_status(task_id: str):
     r = requests.get(f"{SQLMAP_API}/scan/{task_id}/status", auth=AUTH)
