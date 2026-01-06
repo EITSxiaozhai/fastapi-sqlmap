@@ -22,6 +22,8 @@ celery_app = Celery(
     backend=f"redis://:{db_password}@{redis_host}:{redis_port}/{redis_db}",
 )
 
+celery_app.autodiscover_tasks(packages=["app.tasks"])
+
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],

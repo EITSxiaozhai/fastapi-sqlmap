@@ -1,11 +1,10 @@
-from sqlalchemy import select
-from app.middleware.celery_app import celery_app
+from celery import shared_task
 from app.database.celery_sync_database import SessionLocal
 from app.models.sqlmap_result import SqlmapScanPayload, ScanStatus
 from app.tasks.sqlmap_worker import poll_single_sqlmap_task
 
 
-@celery_app.task(name="app.tasks.sqlmap_scheduler.poll_active_sqlmap_tasks")
+@shared_task
 def poll_active_sqlmap_tasks():
     with SessionLocal() as session:
         tasks = (

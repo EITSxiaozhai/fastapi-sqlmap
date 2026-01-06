@@ -1,5 +1,4 @@
-from celery.schedules import crontab
-from app.middleware import celery_app
+from app.middleware.celery_app import celery_app
 
 celery_app.conf.beat_schedule = {
     "poll-sqlmap-tasks-every-5-seconds": {

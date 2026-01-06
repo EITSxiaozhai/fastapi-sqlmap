@@ -1,12 +1,9 @@
 import requests
 from datetime import datetime
-from sqlalchemy.exc import SQLAlchemyError
-
-from app.middleware.celery_app import celery_app
+from celery import shared_task
 from app.database.celery_sync_database import SessionLocal
 from app.models.sqlmap_result import (
     SqlmapScanPayload,
-    SqlmapScanLog,
     ScanStatus,
     SqlmapScanResult,
 )
@@ -57,12 +54,11 @@ def normalize_sqlmap_result(raw: dict) -> dict:
     return result
 
 
-@celery_app.task(
+@shared_task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=5,
     retry_kwargs={"max_retries": 3},
-    name="app.tasks.sqlmap_worker.poll_single_sqlmap_task",
 )
 def poll_single_sqlmap_task(self, task_id: str):
     session = SessionLocal()
