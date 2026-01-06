@@ -37,7 +37,7 @@ class SqlmapScanResult(Base):
     dump_data: Mapped[dict | None] = mapped_column(JSONB)
 
     # 原始输出（stdout）
-    raw_output: Mapped[str | None] = mapped_column(Text)
+    raw_output: Mapped[dict | None] = mapped_column(JSONB)
 
     # 实际执行的 sqlmap 命令
     command: Mapped[str] = mapped_column(Text, nullable=False)
