@@ -1,9 +1,9 @@
 import os
 from urllib.parse import quote_plus
 
+import dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-import dotenv
 
 dotenv.load_dotenv()
 

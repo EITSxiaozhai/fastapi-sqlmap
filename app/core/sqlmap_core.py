@@ -1,6 +1,7 @@
-from app.database.database import AsyncSessionLocal
-from app.models.sqlmap_result import SqlmapScanPayload, SqlmapScanLog, SqlmapScanResult
 from sqlalchemy import select
+
+from app.database.database import AsyncSessionLocal
+from app.models.sqlmap_result import SqlmapScanPayload, SqlmapScanLog
 
 
 async def task_add(

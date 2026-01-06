@@ -1,5 +1,6 @@
-from pydantic import BaseModel, HttpUrl, Field
 from typing import Optional, List
+
+from pydantic import BaseModel, HttpUrl, Field
 
 
 class SQLMapScanRequest(BaseModel):

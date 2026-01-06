@@ -1,12 +1,12 @@
 import os
 from urllib.parse import quote_plus
 
+import dotenv
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     AsyncSession,
 )
 from sqlalchemy.orm import sessionmaker, declarative_base
-import dotenv
 
 dotenv.load_dotenv()
 
@@ -15,7 +15,6 @@ database_port = os.getenv("POSTGRES_PORT")
 database_user = os.getenv("POSTGRES_USER")
 database_password = os.getenv("POSTGRES_PASSWORD")
 database_name = os.getenv("POSTGRES_DB")
-
 
 # 密码 URL 编码（非常重要）
 database_password = quote_plus(database_password)

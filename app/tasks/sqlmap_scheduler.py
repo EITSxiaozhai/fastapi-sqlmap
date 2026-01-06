@@ -1,4 +1,5 @@
 from celery import shared_task
+
 from app.database.celery_sync_database import SessionLocal
 from app.models.sqlmap_result import SqlmapScanPayload, ScanStatus
 from app.tasks.sqlmap_worker import poll_single_sqlmap_task

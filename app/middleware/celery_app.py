@@ -1,5 +1,6 @@
-from celery import Celery
 import os
+
+from celery import Celery
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +15,6 @@ mq_username = os.getenv("MQ_USERNAME")
 mq_host = os.getenv("MQ_HOSTNAME")
 mq_dbname = os.getenv("MQ_DBNAME")
 mq_port = os.getenv("MQ_DBPORT")
-
 
 celery_app = Celery(
     "fastapi_sqlmap",
