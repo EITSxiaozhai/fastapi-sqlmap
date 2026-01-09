@@ -61,6 +61,7 @@ def celery_task_add(
     status: str,
     scan_risk: int = 1,
     scan_level: int = 1,
+    celery_task_id: str,
 ):
     task = SqlmapScanPayload(
         task_id=task_id,
@@ -68,6 +69,7 @@ def celery_task_add(
         status=status,
         scan_risk=scan_risk,
         scan_level=scan_level,
+        celery_task_id=celery_task_id,
     )
     session.add(task)
     session.commit()
