@@ -11,6 +11,7 @@ from app.models.sqlmap_result import (
     ScanStatus,
     SqlmapScanResult,
 )
+from app.core.sqlmap_core import celery_task_add
 
 SQLMAP_API = os.getenv("SQLMAP_API")
 AUTH = (os.getenv("SQLMAP_USERNAME"), os.getenv("SQLMAP_PASSWORD"))  # Basic Auth
@@ -145,20 +146,39 @@ def poll_single_sqlmap_task(self, task_id: str):
 )
 def sqlmap_scan_task(self, payload: dict):
     session = SessionLocal()
-    r = requests.get(f"{SQLMAP_API}/task/new", auth=AUTH)
-    if not r.ok:
-        raise HTTPException(500, "sqlmap task 创建失败")
+    try:
+        # 1. 创建 SQLMap 任务
+        r = requests.get(f"{SQLMAP_API}/task/new", auth=AUTH, timeout=10)
+        r.raise_for_status()
+        sqlmap_task_id = r.json()["taskid"]
 
-    taskid = r.json()["taskid"]
+        # 2. 启动扫描
+        start = requests.post(
+            f"{SQLMAP_API}/scan/{sqlmap_task_id}/start",
+            json=payload,
+            auth=AUTH,
+            timeout=30,
+        )
+        start.raise_for_status()
 
-    # 2. 启动扫描
-    start = requests.post(
-        f"{SQLMAP_API}/scan/{taskid}/start",
-        json=payload,  # json转换问题
-        auth=AUTH,
-    )
+        # 3. 扫描启动成功后，调用 celery_task_add 写入 DB
+        celery_task_add(
+            session=session,
+            task_id=self.request.id,  # Celery 任务 ID
+            scan_url=str(payload["url"]),  # 转成 str，防止 HttpUrl 错误
+            status="RUNNING",
+            scan_risk=payload.get("risk", 1),
+            scan_level=payload.get("level", 1),
+        )
 
-    if not start.ok:
-        raise HTTPException(500, start.text)
+        return {
+            "celery_task_id": self.request.id,
+            "sqlmap_task_id": sqlmap_task_id,
+        }
 
-    return {"taskid": taskid}
+    except Exception as e:
+        session.rollback()
+        raise e
+
+    finally:
+        session.close()
