@@ -53,12 +53,17 @@ class SqlmapScanPayload(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    task_id: Mapped[int] = mapped_column(Text, nullable=False)
+    task_id: Mapped[str] = mapped_column(Text, nullable=False)
 
     status: Mapped[ScanStatus] = mapped_column(
         Enum(ScanStatus, name="scan_status_enum"),
         nullable=False,
         default=ScanStatus.pending,
+    )
+
+    celery_task_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
     )
 
     scan_url: Mapped[str | None] = mapped_column(String(2048), nullable=False)
@@ -98,4 +103,9 @@ class SqlmapScanLog(Base):
         DateTime,
         default=datetime.utcnow,
         index=True,
+    )
+
+    celery_task_id: Mapped[int] = mapped_column(
+        String(64),
+        nullable=False,
     )
