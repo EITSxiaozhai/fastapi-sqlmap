@@ -1,18 +1,22 @@
-import requests
+import os
 from datetime import datetime
+
+import requests
 from celery import shared_task
+from fastapi import HTTPException
+
 from app.database.celery_sync_database import SessionLocal
 from app.models.sqlmap_result import (
     SqlmapScanPayload,
     ScanStatus,
     SqlmapScanResult,
 )
-import os
 
 SQLMAP_API = os.getenv("SQLMAP_API")
 AUTH = (os.getenv("SQLMAP_USERNAME"), os.getenv("SQLMAP_PASSWORD"))  # Basic Auth
 
 
+# 展平sqlmap日志
 def normalize_sqlmap_result(raw: dict) -> dict:
     result = {
         "success": raw.get("success", False),
@@ -130,3 +134,31 @@ def poll_single_sqlmap_task(self, task_id: str):
         raise
     finally:
         session.close()
+
+
+# 用户手动创建扫描任务
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=5,
+    retry_kwargs={"max_retries": 3},
+)
+def sqlmap_scan_task(self, payload: dict):
+    session = SessionLocal()
+    r = requests.get(f"{SQLMAP_API}/task/new", auth=AUTH)
+    if not r.ok:
+        raise HTTPException(500, "sqlmap task 创建失败")
+
+    taskid = r.json()["taskid"]
+
+    # 2. 启动扫描
+    start = requests.post(
+        f"{SQLMAP_API}/scan/{taskid}/start",
+        json=payload,  # json转换问题
+        auth=AUTH,
+    )
+
+    if not start.ok:
+        raise HTTPException(500, start.text)
+
+    return {"taskid": taskid}
