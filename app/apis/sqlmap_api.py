@@ -1,12 +1,14 @@
 import os
-from fastapi import APIRouter, HTTPException, Body
+
 import requests
 from dotenv import load_dotenv
-import app.schema.sqlmap as sqlmapschema
+from fastapi import APIRouter, HTTPException, Body
+
 import app.core.sqlmap_core as sqlmap_task
+import app.schema.sqlmap as sqlmapschema
+import app.tasks.sqlmap_worker as sqlmap_worker
 
 router = APIRouter(prefix="/sqlmap", tags=["SQLMap扫描任务"])
-
 
 load_dotenv()
 SQLMAP_API = os.getenv("SQLMAP_API")
@@ -24,31 +26,12 @@ async def start_scan(payload: sqlmapschema.SqlmapScanPayload = Body(...)):
     }
     """
 
-    r = requests.get(f"{SQLMAP_API}/task/new", auth=AUTH)
-    if not r.ok:
-        raise HTTPException(500, "sqlmap task 创建失败")
+    celery_tasks = sqlmap_worker.sqlmap_scan_task.delay(payload.model_dump(mode="json"))
 
-    taskid = r.json()["taskid"]
-
-    # 2. 启动扫描
-    start = requests.post(
-        f"{SQLMAP_API}/scan/{taskid}/start",
-        json=payload.model_dump(mode="json"),  # json转换问题
-        auth=AUTH,
-    )
-
-    await sqlmap_task.task_add(
-        task_id=taskid,
-        scan_url=str(payload.url),
-        status="running",
-        scan_risk=payload.risk,
-        scan_level=payload.level,
-    )
-
-    if not start.ok:
-        raise HTTPException(500, start.text)
-
-    return {"success": True, "taskid": taskid}
+    return {
+        "success": True,
+        "taskid": celery_tasks.id,
+    }
 
 
 @router.get("/tasks")
