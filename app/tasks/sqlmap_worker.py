@@ -59,6 +59,7 @@ def normalize_sqlmap_result(raw: dict) -> dict:
     return result
 
 
+# 轮询获取运行状态信息
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
@@ -105,28 +106,30 @@ def poll_single_sqlmap_task(self, task_id: str):
         result_resp.raise_for_status()
         data = result_resp.json()
 
-        # 展平sqlmap返回日志
-        normalized = normalize_sqlmap_result(data)
+        print(data)
 
-        print(normalized)
-
-        # 解析 sqlmap 返回
-        scan_result = SqlmapScanResult(
-            target_url=normalized["data"]["target"]["url"],
-            dbms=normalized["data"]["dbms"].get("name"),
-            vulnerable=bool(normalized["data"]["injections"]),
-            injection_points=normalized["data"]["injections"],
-            dump_data=None,  # 后续支持 sqlmap dump 再填
-            raw_output=normalized,
-            command="",
-            started_at=datetime.utcnow(),
-            finished_at=datetime.utcnow(),
-        )
-
-        session.add(scan_result)
-        task.status = ScanStatus.success
-
-        session.commit()
+        # # 展平sqlmap返回日志
+        # normalized = normalize_sqlmap_result(data)
+        #
+        # print(normalized)
+        #
+        # # 解析 sqlmap 返回
+        # scan_result = SqlmapScanResult(
+        #     target_url=normalized["data"]["target"]["url"],
+        #     dbms=normalized["data"]["dbms"].get("name"),
+        #     vulnerable=bool(normalized["data"]["injections"]),
+        #     injection_points=normalized["data"]["injections"],
+        #     dump_data=None,  # 后续支持 sqlmap dump 再填
+        #     raw_output=normalized,
+        #     command="",
+        #     started_at=datetime.utcnow(),
+        #     finished_at=datetime.utcnow(),
+        # )
+        #
+        # session.add(scan_result)
+        # task.status = ScanStatus.success
+        #
+        # session.commit()
 
     except Exception:
         session.rollback()
@@ -164,9 +167,10 @@ def sqlmap_scan_task(self, payload: dict):
         # 3. 扫描启动成功后，调用 celery_task_add 写入 DB
         celery_task_add(
             session=session,
-            task_id=self.request.id,  # Celery 任务 ID
+            task_id=sqlmap_task_id,
+            celery_task_id=self.request.id,  # Celery 任务 ID
             scan_url=str(payload["url"]),  # 转成 str，防止 HttpUrl 错误
-            status="RUNNING",
+            status="running",
             scan_risk=payload.get("risk", 1),
             scan_level=payload.get("level", 1),
         )
