@@ -30,7 +30,7 @@ async def start_scan(payload: sqlmapschema.SqlmapScanPayload = Body(...)):
 
     return {
         "success": True,
-        "taskid": celery_tasks.id,
+        "celery_task_id": celery_tasks.id,
     }
 
 
