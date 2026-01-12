@@ -10,6 +10,7 @@ from app.models.sqlmap_result import (
     SqlmapScanPayload,
     ScanStatus,
     SqlmapScanResult,
+    SqlmapScanLog,
 )
 from app.core.sqlmap_core import celery_task_add
 
@@ -59,83 +60,118 @@ def normalize_sqlmap_result(raw: dict) -> dict:
     return result
 
 
-# 轮询获取运行状态信息
+def fetch_sqlmap_logs(session, task: SqlmapScanPayload):
+    resp = requests.get(
+        f"{SQLMAP_API}/scan/{task.task_id}/log",
+        auth=AUTH,
+    )
+    if not resp.ok:
+        return
+
+    logs = resp.json().get("log", [])
+
+    # 已存在日志（避免重复写）
+    existing = {
+        (l.log_time, l.message)
+        for l in session.query(SqlmapScanLog)
+        .filter(SqlmapScanLog.task_id == task.task_id)
+        .all()
+    }
+
+    for log in logs:
+        key = (log.get("time"), log.get("message"))
+        if key in existing:
+            continue
+
+        session.add(
+            SqlmapScanLog(
+                task_id=task.task_id,
+                level=log.get("level", "INFO"),
+                message=log.get("message"),
+                log_time=log.get("time"),
+                celery_task_id=task.celery_task_id,
+            )
+        )
+
+
+def fetch_sqlmap_result(session, task_id: str):
+    resp = requests.get(
+        f"{SQLMAP_API}/scan/{task_id}/data",
+        auth=AUTH,
+    )
+    if not resp.ok:
+        return
+
+    data = resp.json().get("data", [])
+
+    result = SqlmapScanResult(
+        target_url="",
+        vulnerable=bool(data),
+        raw_output=data,
+        started_at=datetime.utcnow(),
+        finished_at=datetime.utcnow(),
+        command="sqlmap api scan",
+    )
+
+    session.add(result)
+
+
+# 轮询运行状态任务
 @shared_task(
     bind=True,
-    autoretry_for=(Exception,),
+    autoretry_for=(requests.RequestException,),
     retry_backoff=5,
     retry_kwargs={"max_retries": 3},
 )
-def poll_single_sqlmap_task(self, task_id: str):
+def poll_single_sqlmap_task(self, sqlmap_task_id: str):
     session = SessionLocal()
+
     try:
         task = (
             session.query(SqlmapScanPayload)
-            .filter(SqlmapScanPayload.task_id == task_id)
+            .filter(SqlmapScanPayload.task_id == sqlmap_task_id)
             .first()
         )
-
         if not task:
             return
 
-        # 查询 sqlmap task 状态
-        resp = requests.get(
-            f"{SQLMAP_API}/scan/{task_id}/status",
-            timeout=10,
+        # 查询扫描状态
+        status_resp = requests.get(
+            f"{SQLMAP_API}/scan/{sqlmap_task_id}/status",
             auth=AUTH,
         )
-        resp.raise_for_status()
-        status_data = resp.json()
 
-        status = status_data.get("status")
-
-        if status == "running":
-            task.status = ScanStatus.running
+        if status_resp.status_code != 200:
+            task.status = ScanStatus.failed
             session.commit()
             return
 
-        if status != "terminated":
+        status_json = status_resp.json()
+        if not status_json.get("success"):
+            task.status = ScanStatus.failed
+            session.commit()
             return
 
-        # 获取扫描结果
-        result_resp = requests.get(
-            f"{SQLMAP_API}/scan/{task_id}/data",
-            timeout=30,
-            auth=AUTH,
-        )
-        result_resp.raise_for_status()
-        data = result_resp.json()
+        sqlmap_status = status_json["status"]
 
-        print(data)
+        # 状态同步
+        if sqlmap_status == "running":
+            task.status = ScanStatus.running
 
-        # # 展平sqlmap返回日志
-        # normalized = normalize_sqlmap_result(data)
-        #
-        # print(normalized)
-        #
-        # # 解析 sqlmap 返回
-        # scan_result = SqlmapScanResult(
-        #     target_url=normalized["data"]["target"]["url"],
-        #     dbms=normalized["data"]["dbms"].get("name"),
-        #     vulnerable=bool(normalized["data"]["injections"]),
-        #     injection_points=normalized["data"]["injections"],
-        #     dump_data=None,  # 后续支持 sqlmap dump 再填
-        #     raw_output=normalized,
-        #     command="",
-        #     started_at=datetime.utcnow(),
-        #     finished_at=datetime.utcnow(),
-        # )
-        #
-        # session.add(scan_result)
-        # task.status = ScanStatus.success
-        #
-        # session.commit()
+        elif sqlmap_status in ("terminated", "not running"):
+            task.status = ScanStatus.success
+            task.finished_at = datetime.utcnow()
+            fetch_sqlmap_result(session, sqlmap_task_id)
 
-    except Exception:
-        session.rollback()
-        task.status = ScanStatus.failed
+        elif sqlmap_status == "error":
+            task.status = ScanStatus.failed
+            task.finished_at = datetime.utcnow()
+
+        # 同步写入日志
+        fetch_sqlmap_logs(session, task)
+
         session.commit()
-        raise
+
     finally:
         session.close()
 
@@ -177,7 +213,6 @@ def sqlmap_scan_task(self, payload: dict):
 
         return {
             "celery_task_id": self.request.id,
-            "sqlmap_task_id": sqlmap_task_id,
         }
 
     except Exception as e:
