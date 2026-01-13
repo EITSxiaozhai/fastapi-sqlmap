@@ -1,10 +1,16 @@
 import os
 from datetime import datetime
 
-import requests
-from celery import shared_task
-from fastapi import HTTPException
 
+from celery import shared_task
+
+from app.core.async_sqlmap_api import (
+    async_get,
+    async_post,
+    async_fetch_sqlmap_status,
+    async_fetch_sqlmap_logs,
+    async_fetch_sqlmap_result,
+)
 from app.database.celery_sync_database import SessionLocal
 from app.models.sqlmap_result import (
     SqlmapScanPayload,
@@ -13,6 +19,8 @@ from app.models.sqlmap_result import (
     SqlmapScanLog,
 )
 from app.core.sqlmap_core import celery_task_add
+import httpx
+import asyncio
 
 SQLMAP_API = os.getenv("SQLMAP_API")
 AUTH = (os.getenv("SQLMAP_USERNAME"), os.getenv("SQLMAP_PASSWORD"))  # Basic Auth
@@ -60,15 +68,8 @@ def normalize_sqlmap_result(raw: dict) -> dict:
     return result
 
 
-def fetch_sqlmap_logs(session, task: SqlmapScanPayload):
-    resp = requests.get(
-        f"{SQLMAP_API}/scan/{task.task_id}/log",
-        auth=AUTH,
-    )
-    if not resp.ok:
-        return
-
-    logs = resp.json().get("log", [])
+def fetch_sqlmap_logs(session, task: SqlmapScanPayload, logs_json: dict):
+    logs = logs_json.get("log", [])
 
     # 已存在日志（避免重复写）
     existing = {
@@ -94,15 +95,8 @@ def fetch_sqlmap_logs(session, task: SqlmapScanPayload):
         )
 
 
-def fetch_sqlmap_result(session, task_id: str):
-    resp = requests.get(
-        f"{SQLMAP_API}/scan/{task_id}/data",
-        auth=AUTH,
-    )
-    if not resp.ok:
-        return
-
-    data = resp.json().get("data", [])
+def fetch_sqlmap_result(session, task_id: str, result_json: dict):
+    data = result_json.get("data", [])
 
     result = SqlmapScanResult(
         target_url="",
@@ -119,13 +113,12 @@ def fetch_sqlmap_result(session, task_id: str):
 # 轮询运行状态任务
 @shared_task(
     bind=True,
-    autoretry_for=(requests.RequestException,),
+    autoretry_for=(httpx.RequestError,),
     retry_backoff=5,
     retry_kwargs={"max_retries": 3},
 )
 def poll_single_sqlmap_task(self, sqlmap_task_id: str):
     session = SessionLocal()
-
     try:
         task = (
             session.query(SqlmapScanPayload)
@@ -135,18 +128,11 @@ def poll_single_sqlmap_task(self, sqlmap_task_id: str):
         if not task:
             return
 
-        # 查询扫描状态
-        status_resp = requests.get(
-            f"{SQLMAP_API}/scan/{sqlmap_task_id}/status",
-            auth=AUTH,
-        )
+        # 异步查询扫描状态
+        status_json = asyncio.run(async_fetch_sqlmap_status(sqlmap_task_id))
 
-        if status_resp.status_code != 200:
-            task.status = ScanStatus.failed
-            session.commit()
-            return
+        print(status_json)
 
-        status_json = status_resp.json()
         if not status_json.get("success"):
             task.status = ScanStatus.failed
             session.commit()
@@ -154,23 +140,38 @@ def poll_single_sqlmap_task(self, sqlmap_task_id: str):
 
         sqlmap_status = status_json["status"]
 
-        # 状态同步
         if sqlmap_status == "running":
             task.status = ScanStatus.running
+
+            # 异步获取日志
+            logs_json = asyncio.run(async_fetch_sqlmap_logs(sqlmap_task_id))
+            fetch_sqlmap_logs(session, task, logs_json)
+
+            session.commit()
+
+            # 再次轮询
+            self.apply_async(args=[sqlmap_task_id])
+            return
 
         elif sqlmap_status in ("terminated", "not running"):
             task.status = ScanStatus.success
             task.finished_at = datetime.utcnow()
-            fetch_sqlmap_result(session, sqlmap_task_id)
+
+            logs_json = asyncio.run(async_fetch_sqlmap_logs(sqlmap_task_id))
+            result_json = asyncio.run(async_fetch_sqlmap_result(sqlmap_task_id))
+
+            print(result_json)
+
+            fetch_sqlmap_logs(session, task, logs_json)
+            fetch_sqlmap_result(session, sqlmap_task_id, result_json)
+
+            session.commit()
+            return
 
         elif sqlmap_status == "error":
             task.status = ScanStatus.failed
             task.finished_at = datetime.utcnow()
-
-        # 同步写入日志
-        fetch_sqlmap_logs(session, task)
-
-        session.commit()
+            session.commit()
 
     finally:
         session.close()
@@ -186,26 +187,21 @@ def poll_single_sqlmap_task(self, sqlmap_task_id: str):
 def sqlmap_scan_task(self, payload: dict):
     session = SessionLocal()
     try:
-        # 1. 创建 SQLMap 任务
-        r = requests.get(f"{SQLMAP_API}/task/new", auth=AUTH, timeout=10)
-        r.raise_for_status()
-        sqlmap_task_id = r.json()["taskid"]
+        # 异步创建 SQLMap 任务
+        task_json = asyncio.run(async_get("/task/new", timeout=10))
+        sqlmap_task_id = task_json["taskid"]
 
-        # 2. 启动扫描
-        start = requests.post(
-            f"{SQLMAP_API}/scan/{sqlmap_task_id}/start",
-            json=payload,
-            auth=AUTH,
-            timeout=30,
+        # 异步启动扫描
+        start_json = asyncio.run(
+            async_post(f"/scan/{sqlmap_task_id}/start", json=payload, timeout=30)
         )
-        start.raise_for_status()
 
-        # 3. 扫描启动成功后，调用 celery_task_add 写入 DB
+        # 写入数据库
         celery_task_add(
             session=session,
             task_id=sqlmap_task_id,
-            celery_task_id=self.request.id,  # Celery 任务 ID
-            scan_url=str(payload["url"]),  # 转成 str，防止 HttpUrl 错误
+            celery_task_id=self.request.id,
+            scan_url=str(payload["url"]),
             status="running",
             scan_risk=payload.get("risk", 1),
             scan_level=payload.get("level", 1),
