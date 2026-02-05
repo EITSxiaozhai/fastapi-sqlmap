@@ -2,7 +2,7 @@ import os
 
 import requests
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Request
 
 import app.core.sqlmap_core as sqlmap_task
 import app.schema.sqlmap as sqlmapschema
@@ -102,3 +102,23 @@ async def delete_task(task_id: str):
     requests.get(f"{SQLMAP_API}/task/{task_id}/delete", auth=AUTH)
 
     return {"success": True}
+
+
+@router.post("/tasks/webhook/log")
+async def receive_sqlmap_log(request: Request):
+    try:
+        # 获取原始请求体
+        body = await request.body()
+        # 解析JSON数据
+        log_data = await request.json()
+
+        # 打印接收到的数据用于调试
+        print(log_data)
+
+        # TODO: 在这里处理日志数据，例如保存到数据库
+        # 您可以根据log_data的结构进行相应的处理
+
+        return {"success": True, "message": "Log received successfully"}
+    except Exception as e:
+        print(f"Error processing log: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid log data: {str(e)}")
