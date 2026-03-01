@@ -22,11 +22,6 @@ async def async_post(path: str, json=None, timeout=30):
         return resp.json()
 
 
-# 异步获取日志
-async def async_fetch_sqlmap_logs(task_id: str):
-    return await async_get(f"/scan/{task_id}/log")
-
-
 # 异步获取扫描状态
 async def async_fetch_sqlmap_status(task_id: str):
     return await async_get(f"/scan/{task_id}/status")

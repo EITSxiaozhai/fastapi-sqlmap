@@ -8,7 +8,6 @@ from app.core.async_sqlmap_api import (
     async_get,
     async_post,
     async_fetch_sqlmap_status,
-    async_fetch_sqlmap_logs,
     async_fetch_sqlmap_result,
 )
 from app.database.celery_sync_database import SessionLocal
@@ -16,7 +15,6 @@ from app.models.sqlmap_result import (
     SqlmapScanPayload,
     ScanStatus,
     SqlmapScanResult,
-    SqlmapScanLog,
 )
 from app.core.sqlmap_core import celery_task_add
 import httpx
@@ -68,33 +66,6 @@ def normalize_sqlmap_result(raw: dict) -> dict:
     return result
 
 
-def fetch_sqlmap_logs(session, task: SqlmapScanPayload, logs_json: dict):
-    logs = logs_json.get("log", [])
-
-    # 已存在日志（避免重复写）
-    existing = {
-        (l.log_time, l.message)
-        for l in session.query(SqlmapScanLog)
-        .filter(SqlmapScanLog.task_id == task.task_id)
-        .all()
-    }
-
-    for log in logs:
-        key = (log.get("time"), log.get("message"))
-        if key in existing:
-            continue
-
-        session.add(
-            SqlmapScanLog(
-                task_id=task.task_id,
-                level=log.get("level", "INFO"),
-                message=log.get("message"),
-                log_time=log.get("time"),
-                celery_task_id=task.celery_task_id,
-            )
-        )
-
-
 def fetch_sqlmap_result(session, task_id: str, result_json: dict):
     data = result_json.get("data", [])
 
@@ -142,11 +113,6 @@ def poll_single_sqlmap_task(self, sqlmap_task_id: str):
 
         if sqlmap_status == "running":
             task.status = ScanStatus.running
-
-            # 异步获取日志
-            logs_json = asyncio.run(async_fetch_sqlmap_logs(sqlmap_task_id))
-            fetch_sqlmap_logs(session, task, logs_json)
-
             session.commit()
 
             # 再次轮询
@@ -157,14 +123,10 @@ def poll_single_sqlmap_task(self, sqlmap_task_id: str):
             task.status = ScanStatus.success
             task.finished_at = datetime.utcnow()
 
-            logs_json = asyncio.run(async_fetch_sqlmap_logs(sqlmap_task_id))
             result_json = asyncio.run(async_fetch_sqlmap_result(sqlmap_task_id))
-
             print(result_json)
 
-            fetch_sqlmap_logs(session, task, logs_json)
             fetch_sqlmap_result(session, sqlmap_task_id, result_json)
-
             session.commit()
             return
 
