@@ -8,6 +8,7 @@
 [Ll]ib64
 [Ll]ocal
 [Ss]cripts
+*.pyc
 pyvenv.cfg
 .venv
 pip-selfcheck.json
@@ -15,3 +16,7 @@ pip-selfcheck.json
 ### dotenv template
 .env
 
+### celery
+*.bak
+*.dat
+*.dir
