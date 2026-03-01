@@ -107,18 +107,19 @@ async def delete_task(task_id: str):
 @router.post("/tasks/webhook/log")
 async def receive_sqlmap_log(request: Request):
     try:
-        # 获取原始请求体
-        body = await request.body()
-        # 解析JSON数据
+        # 解析 JSON 日志
         log_data = await request.json()
 
-        # 打印接收到的数据用于调试
-        print(log_data)
+        # 兼容单条和多条日志两种格式
+        if isinstance(log_data, dict):
+            logs = [log_data]
+        elif isinstance(log_data, list):
+            logs = log_data
+        else:
+            raise HTTPException(status_code=400, detail="Invalid log payload format")
 
-        # TODO: 在这里处理日志数据，例如保存到数据库
-        # 您可以根据log_data的结构进行相应的处理
+        await sqlmap_task.save_sqlmap_logs(logs)
 
-        return {"success": True, "message": "Log received successfully"}
+        return {"success": True, "message": "Log stored successfully"}
     except Exception as e:
-        print(f"Error processing log: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid log data: {str(e)}")
